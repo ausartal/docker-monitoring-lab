@@ -1,0 +1,4 @@
+node_modules
+.env
+grafana_data
+postgres_data

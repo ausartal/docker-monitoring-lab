@@ -1,0 +1,79 @@
+services:
+
+  nginx:
+    image: nginx
+    container_name: nginx-web
+
+    ports:
+      - "8080:80"
+
+    volumes:
+      - ./app:/usr/share/nginx/html
+
+  postgres:
+    image: postgres:16
+    container_name: postgres-db
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: latihan
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus-monitor
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana-monitor
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor-monitor
+
+    privileged: true
+
+    ports:
+      - "8088:8080"
+
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak-auth
+
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+
+    command: start-dev
+
+    ports:
+      - "8081:8080"
+
+volumes:
+  postgres_data:
+  grafana_data:
+
