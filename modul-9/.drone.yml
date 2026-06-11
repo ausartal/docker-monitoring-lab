@@ -1,0 +1,88 @@
+# ============================================
+# Drone CI/CD Pipeline — Flask Demo App
+# Alur: Unit Test → Build → Security Scan → Push → Deploy
+# ============================================
+
+kind: pipeline
+type: docker
+name: flask-demo-pipeline
+
+steps:
+  # STEP 1: Unit Test
+  - name: unit-test
+    image: python:3.11-slim
+    commands:
+      - pip install --no-cache-dir -r requirements.txt
+      - python -m pytest test_app.py -v --tb=short
+      - echo "✅ All tests passed!"
+
+  # STEP 2: Build Docker Image
+  - name: build-image
+    image: docker:dind
+    volumes:
+      - name: docker-socket
+        path: /var/run/docker.sock
+    commands:
+      - echo "Building image..."
+      - docker build -t flask-demo:${DRONE_COMMIT_SHA:0:8} .
+      - docker tag flask-demo:${DRONE_COMMIT_SHA:0:8} flask-demo:latest
+      - docker images | grep flask-demo
+      - echo "✅ Image built!"
+
+  # STEP 3: Security Scan (Trivy)
+  - name: security-scan
+    image: aquasec/trivy:latest
+    volumes:
+      - name: docker-socket
+        path: /var/run/docker.sock
+    commands:
+      - echo "Scanning image for CVE..."
+      - trivy image --severity HIGH,CRITICAL --exit-code 0 flask-demo:${DRONE_COMMIT_SHA:0:8}
+      - echo "✅ Scan completed!"
+
+  # STEP 4: Push ke Private Registry
+  - name: push-to-registry
+    image: docker:dind
+    volumes:
+      - name: docker-socket
+        path: /var/run/docker.sock
+    environment:
+      REGISTRY_USER:
+        from_secret: registry_user
+      REGISTRY_PASS:
+        from_secret: registry_pass
+    commands:
+      - echo "Pushing to registry..."
+      - docker login registry.lab:5000 -u $REGISTRY_USER -p $REGISTRY_PASS
+      - docker tag flask-demo:${DRONE_COMMIT_SHA:0:8} registry.lab:5000/pens/flask-demo:${DRONE_COMMIT_SHA:0:8}
+      - docker tag flask-demo:${DRONE_COMMIT_SHA:0:8} registry.lab:5000/pens/flask-demo:latest
+      - docker push registry.lab:5000/pens/flask-demo:${DRONE_COMMIT_SHA:0:8}
+      - docker push registry.lab:5000/pens/flask-demo:latest
+      - echo "✅ Pushed to registry!"
+
+  # STEP 5: Deploy
+  - name: deploy
+    image: docker:dind
+    volumes:
+      - name: docker-socket
+        path: /var/run/docker.sock
+    commands:
+      - echo "Deploying..."
+      - docker pull registry.lab:5000/pens/flask-demo:latest
+      - docker stop flask-production 2>/dev/null || true
+      - docker rm flask-production 2>/dev/null || true
+      - |
+        docker run -d \
+          --name flask-production \
+          --restart unless-stopped \
+          -p 8090:5000 \
+          -e APP_VERSION="${DRONE_COMMIT_SHA:0:8}" \
+          registry.lab:5000/pens/flask-demo:latest
+      - sleep 3
+      - docker ps | grep flask-production
+      - echo "✅ Deployed! Access at http://localhost:8090"
+
+volumes:
+  - name: docker-socket
+    host:
+      path: /var/run/docker.sock

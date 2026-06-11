@@ -1,0 +1,9 @@
+.git
+.drone.yml
+test_app.py
+__pycache__
+*.pyc
+.env
+*.md
+Dockerfile*
+.dockerignore
