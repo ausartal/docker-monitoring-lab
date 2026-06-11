@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Docker Lab - PENS</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px;
+               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+               color: white; }
+        .container { background: rgba(255,255,255,0.1); border-radius: 15px;
+                     padding: 40px; max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 2.5em; }
+        .info { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;
+                margin-top: 20px; text-align: left; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐳 Docker Lab PENS</h1>
+        <p>Container berhasil berjalan!</p>
+        <div class="info">
+            <p><strong>Hostname:</strong> <span id="host"></span></p>
+            <p><strong>Server:</strong> Nginx on Docker</p>
+            <p><strong>Praktikum:</strong> Modul 1 — Instalasi Docker</p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('host').textContent = location.hostname;
+    </script>
+</body>
+</html>
