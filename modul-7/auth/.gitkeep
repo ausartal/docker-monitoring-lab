@@ -1,0 +1,4 @@
+# Generate htpasswd dengan:
+# sudo apt install -y apache2-utils
+# htpasswd -Bbn admin registry123 > auth/htpasswd
+# htpasswd -Bbn student student123 >> auth/htpasswd

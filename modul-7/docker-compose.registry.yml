@@ -1,0 +1,38 @@
+services:
+  # Private Docker Registry
+  registry:
+    image: registry:2
+    container_name: docker-registry
+    ports:
+      - "5000:5000"
+    environment:
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: "PENS Docker Registry"
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/registry.crt
+      REGISTRY_HTTP_TLS_KEY: /certs/registry.key
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    volumes:
+      - registry-data:/var/lib/registry
+      - ./certs:/certs:ro
+      - ./auth:/auth:ro
+    restart: unless-stopped
+
+  # Registry Web UI
+  registry-ui:
+    image: joxit/docker-registry-ui:latest
+    container_name: registry-ui
+    ports:
+      - "5080:80"
+    environment:
+      REGISTRY_TITLE: "PENS Private Registry"
+      REGISTRY_URL: "https://registry:5000"
+      SINGLE_REGISTRY: "true"
+      DELETE_IMAGES: "true"
+      NGINX_PROXY_PASS_URL: "https://registry:5000"
+    depends_on:
+      - registry
+    restart: unless-stopped
+
+volumes:
+  registry-data:

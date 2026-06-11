@@ -1,0 +1,5 @@
+# Generate TLS certificate untuk private registry:
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#   -keyout registry.key -out registry.crt \
+#   -subj "/C=ID/ST=Jawa Timur/L=Surabaya/O=PENS Lab/CN=registry.lab" \
+#   -addext "subjectAltName=DNS:registry.lab,DNS:localhost,IP:127.0.0.1"
