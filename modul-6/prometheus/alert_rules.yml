@@ -1,0 +1,45 @@
+groups:
+  - name: host_alerts
+    rules:
+      - alert: HighCpuUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage tinggi ({{ $value | printf \"%.1f\" }}%)"
+          description: "CPU usage di atas 80% selama lebih dari 2 menit."
+
+      - alert: LowMemoryAvailable
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100) < 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory tersedia rendah ({{ $value | printf \"%.1f\" }}%)"
+
+      - alert: HighDiskUsage
+        expr: 100 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100) > 85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage tinggi ({{ $value | printf \"%.1f\" }}%)"
+
+  - name: container_alerts
+    rules:
+      - alert: ContainerRestartFrequent
+        expr: increase(container_restart_count[15m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} restart berulang"
+
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes{name!=""} > 268435456
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} memory > 256MB"
