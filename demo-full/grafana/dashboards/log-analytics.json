@@ -1,0 +1,6 @@
+{"uid":"demo-logs","title":"Log Analytics","tags":["demo"],"schemaVersion":38,"refresh":"30s","panels":[
+{"id":1,"type":"stat","title":"Total Logs","gridPos":{"h":4,"w":6,"x":0,"y":0},"datasource":"PostgreSQL-Logs","targets":[{"rawSql":"SELECT COUNT(*) FROM logs.fluentbit","refId":"A","format":"table"}]},
+{"id":2,"type":"stat","title":"Errors Last Hour","gridPos":{"h":4,"w":6,"x":6,"y":0},"datasource":"PostgreSQL-Logs","targets":[{"rawSql":"SELECT COUNT(*) FROM logs.fluentbit WHERE data->>'level'='ERROR' AND time>NOW()-INTERVAL '1 hour'","refId":"A","format":"table"}]},
+{"id":3,"type":"piechart","title":"Level Distribution","gridPos":{"h":8,"w":8,"x":0,"y":4},"datasource":"PostgreSQL-Logs","targets":[{"rawSql":"SELECT data->>'level' AS level,COUNT(*) AS count FROM logs.fluentbit WHERE time>NOW()-INTERVAL '1 hour' GROUP BY 1 ORDER BY 2 DESC","refId":"A","format":"table"}]},
+{"id":4,"type":"table","title":"Recent Errors","gridPos":{"h":8,"w":16,"x":8,"y":4},"datasource":"PostgreSQL-Logs","targets":[{"rawSql":"SELECT time,tag,data->>'service' AS service,data->>'message' AS message FROM logs.fluentbit WHERE data->>'level' IN ('ERROR','CRITICAL') ORDER BY time DESC LIMIT 20","refId":"A","format":"table"}]}
+]}

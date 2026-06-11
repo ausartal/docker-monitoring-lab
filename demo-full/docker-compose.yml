@@ -1,0 +1,351 @@
+version: "3.9"
+
+# ============================================================
+#  DOCKER MONITORING LAB — DEMO FULL STACK
+#  Mencakup seluruh materi Modul 1–9
+#  Jalankan: docker compose up -d --build
+# ============================================================
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+  monitoring:
+    driver: bridge
+  logging-net:
+    driver: bridge
+
+volumes:
+  pg-main-data:
+  pg-kc-data:
+  grafana-data:
+  prometheus-data:
+  gitea-data:
+  registry-data:
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  db_user:
+    file: ./secrets/db_user.txt
+
+# ============================================================
+# MODUL 1 & 3 — Nginx Reverse Proxy + SSL
+# ============================================================
+services:
+  nginx-proxy:
+    image: nginx:1.26-alpine
+    container_name: demo-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/landing:/usr/share/nginx/landing:ro
+    networks:
+      - frontend
+    depends_on:
+      - apache-web
+      - flask-app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# ============================================================
+# MODUL 3 — Apache Web Server + Virtual Hosts
+# ============================================================
+  apache-web:
+    build: ./apache
+    container_name: demo-apache
+    networks:
+      - frontend
+    restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        fluentd-async: "true"
+        tag: "apache.access"
+
+# ============================================================
+# MODUL 2, 5, 6, 7, 8 — Flask Application
+# ============================================================
+  flask-app:
+    build: ./flask-app
+    container_name: demo-flask
+    environment:
+      - DB_HOST=postgres-main
+      - DB_PORT=5432
+      - DB_NAME=labdb
+      - FLASK_ENV=production
+      - PROMETHEUS_MULTIPROC_DIR=/tmp
+    secrets:
+      - db_user
+      - db_password
+    networks:
+      - frontend
+      - backend
+      - monitoring
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        fluentd-async: "true"
+        tag: "flask.app"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+# ============================================================
+# MODUL 4 — PostgreSQL Database
+# ============================================================
+  postgres-main:
+    image: postgres:16-alpine
+    container_name: demo-postgres
+    environment:
+      POSTGRES_DB: labdb
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_user
+      - db_password
+    volumes:
+      - pg-main-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend
+      - logging-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labuser -d labdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: demo-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@pens.ac.id
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    networks:
+      - backend
+    depends_on:
+      - postgres-main
+    restart: unless-stopped
+
+# ============================================================
+# MODUL 5 — Fluent Bit Centralized Logging
+# ============================================================
+  fluent-bit:
+    image: fluent/fluent-bit:3.2
+    container_name: demo-fluentbit
+    ports:
+      - "24224:24224"
+    volumes:
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    networks:
+      - logging-net
+      - backend
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    restart: unless-stopped
+
+  log-generator:
+    build: ./log-generator
+    container_name: demo-log-generator
+    networks:
+      - frontend
+    depends_on:
+      - fluent-bit
+    restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        fluentd-async: "true"
+        tag: "generator.logs"
+
+# ============================================================
+# MODUL 6 — Prometheus + Grafana Monitoring
+# ============================================================
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: demo-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: demo-node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: demo-cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: demo-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring
+      - backend
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+# ============================================================
+# MODUL 7 — Private Docker Registry
+# ============================================================
+  registry:
+    image: registry:2
+    container_name: demo-registry
+    ports:
+      - "5001:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - frontend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  registry-ui:
+    image: joxit/docker-registry-ui:latest
+    container_name: demo-registry-ui
+    ports:
+      - "8086:80"
+    environment:
+      - SINGLE_REGISTRY=true
+      - REGISTRY_TITLE=PENS Private Registry
+      - NGINX_PROXY_PASS_URL=http://registry:5000
+      - SHOW_CONTENT_DIGEST=true
+    networks:
+      - frontend
+    depends_on:
+      - registry
+    restart: unless-stopped
+
+# ============================================================
+# MODUL 8 — Keycloak IAM / SSO
+# ============================================================
+  postgres-kc:
+    image: postgres:16-alpine
+    container_name: demo-postgres-kc
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: kcuser
+      POSTGRES_PASSWORD: kcpass123
+    volumes:
+      - pg-kc-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kcuser -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: demo-keycloak
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-kc:5432/keycloak
+      KC_DB_USERNAME: kcuser
+      KC_DB_PASSWORD: kcpass123
+      KC_HTTP_PORT: 8080
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8180:8080"
+    networks:
+      - backend
+      - frontend
+    depends_on:
+      postgres-kc:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ============================================================
+# MODUL 9 — Gitea (Self-hosted Git)
+# ============================================================
+  gitea:
+    image: gitea/gitea:1.21
+    container_name: demo-gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+    ports:
+      - "3001:3000"
+      - "2222:22"
+    volumes:
+      - gitea-data:/data
+    networks:
+      - frontend
+    restart: unless-stopped

@@ -1,0 +1,20 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+  - name: PostgreSQL-Logs
+    type: postgres
+    access: proxy
+    url: postgres-main:5432
+    database: labdb
+    user: labuser
+    secureJsonData:
+      password: labpass123
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+    editable: false

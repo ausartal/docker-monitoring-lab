@@ -1,0 +1,5 @@
+{"uid":"demo-containers","title":"Container Metrics","tags":["demo"],"schemaVersion":38,"refresh":"10s","panels":[
+{"id":1,"type":"stat","title":"Running Containers","gridPos":{"h":4,"w":6,"x":0,"y":0},"targets":[{"expr":"count(container_last_seen{name!=\"\"})","refId":"A"}]},
+{"id":2,"type":"timeseries","title":"CPU per Container","gridPos":{"h":8,"w":12,"x":0,"y":4},"targets":[{"expr":"rate(container_cpu_usage_seconds_total{name!=\"\"}[2m])*100","legendFormat":"{{name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"percent"}}},
+{"id":3,"type":"timeseries","title":"Memory per Container","gridPos":{"h":8,"w":12,"x":12,"y":4},"targets":[{"expr":"container_memory_usage_bytes{name!=\"\"}","legendFormat":"{{name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"bytes"}}}
+]}
