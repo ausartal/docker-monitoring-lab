@@ -1,0 +1,41 @@
+# Secrets (JANGAN commit file secret ke git!)
+secrets/db_user
+secrets/db_password
+secrets/db_name
+secrets/db_host
+secrets/kc_*
+modul-7/auth/htpasswd
+modul-8/secrets/kc_*
+
+# SSL Certificates (generate sendiri)
+*.key
+*.crt
+*.pem
+
+# Environment files (berisi credentials)
+.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Docker backup files
+*.dump
+*.sql.bak
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
