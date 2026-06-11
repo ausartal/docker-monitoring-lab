@@ -1,0 +1,118 @@
+secrets:
+  kc_db_name:
+    file: ./secrets/kc_db_name
+  kc_db_user:
+    file: ./secrets/kc_db_user
+  kc_db_password:
+    file: ./secrets/kc_db_password
+  kc_admin_user:
+    file: ./secrets/kc_admin_user
+  kc_admin_password:
+    file: ./secrets/kc_admin_password
+
+services:
+  # IDENTITY PROVIDER: Keycloak
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres-kc
+      KC_DB_URL_PORT: 5432
+      KC_DB_URL_DATABASE: keycloakdb
+      KC_DB_USERNAME: keycloakuser
+      KC_DB_PASSWORD: KcDBp@ss2025
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME_STRICT: "false"
+      TZ: Asia/Jakarta
+    ports:
+      - "8180:8080"
+    networks:
+      - kc-net
+    depends_on:
+      postgres-kc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080; echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; cat <&3 | grep -q 'UP'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # DATABASE: PostgreSQL untuk Keycloak
+  postgres-kc:
+    image: postgres:16-alpine
+    container_name: postgres-kc
+    environment:
+      POSTGRES_DB: keycloakdb
+      POSTGRES_USER: keycloakuser
+      POSTGRES_PASSWORD: KcDBp@ss2025
+      TZ: Asia/Jakarta
+    volumes:
+      - kc-pg-data:/var/lib/postgresql/data
+    networks:
+      - kc-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloakuser -d keycloakdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # APPLICATION 1: Portal Mahasiswa
+  flask-app-1:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.app1
+    container_name: flask-app-1
+    environment:
+      - APP_NAME=Portal Mahasiswa
+      - APP_PORT=5001
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_EXTERNAL_URL=http://localhost:8180
+      - KEYCLOAK_REALM=pens-lab
+      - KEYCLOAK_CLIENT_ID=flask-app-1
+      - KEYCLOAK_CLIENT_SECRET=flask-app-1-secret
+    ports:
+      - "5001:5001"
+    networks:
+      - kc-net
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # APPLICATION 2: Portal Nilai (SSO Demo)
+  flask-app-2:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.app2
+    container_name: flask-app-2
+    environment:
+      - APP_NAME=Portal Nilai
+      - APP_PORT=5002
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_EXTERNAL_URL=http://localhost:8180
+      - KEYCLOAK_REALM=pens-lab
+      - KEYCLOAK_CLIENT_ID=flask-app-2
+      - KEYCLOAK_CLIENT_SECRET=flask-app-2-secret
+    ports:
+      - "5002:5002"
+    networks:
+      - kc-net
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kc-pg-data:
+
+networks:
+  kc-net:
