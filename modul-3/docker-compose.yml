@@ -1,0 +1,73 @@
+services:
+  # Nginx Reverse Proxy + SSL Termination
+  proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - nginx-logs:/var/log/nginx
+    networks:
+      - web-net
+    depends_on:
+      - apache-web
+      - flask-app
+    restart: unless-stopped
+
+  # Apache Web Server (Virtual Hosts)
+  apache-web:
+    build: ./apache
+    container_name: apache-web
+    volumes:
+      - apache-logs:/var/log/apache2
+    networks:
+      - web-net
+    restart: unless-stopped
+
+  # Flask Backend API
+  flask-app:
+    build: ./flask
+    container_name: flask-app
+    environment:
+      - DB_HOST=db
+      - DB_NAME=labdb
+      - DB_USER=labuser
+      - DB_PASS=labpass123
+    networks:
+      - web-net
+      - db-net
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: labdb
+      POSTGRES_USER: labuser
+      POSTGRES_PASSWORD: labpass123
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - db-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labuser -d labdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+  nginx-logs:
+  apache-logs:
+
+networks:
+  web-net:
+  db-net:

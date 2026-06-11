@@ -1,0 +1,5 @@
+# Direktori ini untuk menyimpan SSL certificate yang di-generate dengan:
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#   -keyout server.key -out server.crt \
+#   -subj "/C=ID/ST=Jawa Timur/L=Surabaya/O=PENS Lab/CN=*.lab" \
+#   -addext "subjectAltName=DNS:*.lab,DNS:site1.lab,DNS:site2.lab,DNS:app.lab"
