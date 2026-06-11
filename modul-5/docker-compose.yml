@@ -1,0 +1,104 @@
+services:
+  # LOG STORAGE: PostgreSQL
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: labdb
+      POSTGRES_USER: labuser
+      POSTGRES_PASSWORD: labpass123
+      TZ: Asia/Jakarta
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - logging-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labuser -d labdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # LOG COLLECTOR: Fluent Bit
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: fluent-bit
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    networks:
+      - logging-net
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # LOG PRODUCERS
+  nginx-web:
+    image: nginx:alpine
+    container_name: nginx-web
+    ports:
+      - "8080:80"
+    networks:
+      - logging-net
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: "localhost:24224"
+        fluentd-async: "true"
+        tag: "docker.nginx"
+    depends_on:
+      - fluent-bit
+    restart: unless-stopped
+
+  flask-app:
+    build: ./app
+    container_name: flask-app
+    environment:
+      - DB_HOST=postgres-db
+      - DB_NAME=labdb
+      - DB_USER=labuser
+      - DB_PASS=labpass123
+    ports:
+      - "5000:5000"
+    networks:
+      - logging-net
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: "localhost:24224"
+        fluentd-async: "true"
+        tag: "docker.flask"
+    depends_on:
+      - fluent-bit
+      - postgres-db
+    restart: unless-stopped
+
+  log-generator:
+    build: ./generator
+    container_name: log-generator
+    environment:
+      - LOG_INTERVAL=3
+    networks:
+      - logging-net
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: "localhost:24224"
+        fluentd-async: "true"
+        tag: "docker.generator"
+    depends_on:
+      - fluent-bit
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+
+networks:
+  logging-net:
